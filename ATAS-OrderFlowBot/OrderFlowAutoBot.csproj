@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Deine installierte ATAS-Version läuft auf .NET 10 (per Reflection geprüft).
+         net8.0-windows kompiliert dagegen problemlos; falls deine Visual-Studio-Installation
+         bereits das .NET-10-SDK hat, kannst du hier auch net10.0-windows eintragen. -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>OrderFlowAutoBot</RootNamespace>
+    <AssemblyName>OrderFlowAutoBot</AssemblyName>
+
+    <!-- Auf diesem Rechner gefundene ATAS-Installation. -->
+    <AtasInstallDir>C:\Program Files (x86)\ATAS Platform</AtasInstallDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="ATAS.Indicators">
+      <HintPath>$(AtasInstallDir)\ATAS.Indicators.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="ATAS.Indicators.Technical">
+      <HintPath>$(AtasInstallDir)\ATAS.Indicators.Technical.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="ATAS.Strategies">
+      <HintPath>$(AtasInstallDir)\ATAS.Strategies.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="ATAS.DataFeedsCore">
+      <HintPath>$(AtasInstallDir)\ATAS.DataFeedsCore.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Utils.Common">
+      <HintPath>$(AtasInstallDir)\Utils.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>
