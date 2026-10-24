@@ -1,6 +1,6 @@
 # strategy-tests
 
-Backtests von Handelsstrategien auf historischen Kursdaten von tastytrade (DXLink).
+Backtests von Handelsstrategien auf historischen Kursdaten von tastytrade (DXLink) oder Interactive Brokers.
 
 ## Setup
 
@@ -68,6 +68,35 @@ Unregister-ScheduledTask -TaskName "strategy-tests 1m-Archiv"     # entfernen
 ```
 
 Weitere Symbole: in `collect_intraday.ps1` den Standardwert von `$Symbols` erweitern.
+
+## Daten von Interactive Brokers (`fetch_ib.py`)
+
+IB liefert Minutenkerzen über Jahre statt nur ~20 Handelstage. `fetch_ib.py` schreibt dasselbe CSV-Format
+nach `data/ib/`, damit die tastytrade-Dateien in `data/` unberührt bleiben. Die Backtests lesen es mit `--data-dir`:
+
+```powershell
+.\.venv\Scripts\python.exe fetch_ib.py SPY QQQ --period 1m --years 2
+.\.venv\Scripts\python.exe backtest_rsi.py --data-dir data/ib --interval 1m --exit mid --cost-bps 1
+```
+
+- **Voraussetzung:** IB Gateway läuft und ist angemeldet, unter *Configure → Settings → API → Settings* ist
+  „Enable ActiveX and Socket Clients“ an und der Port 4001 eingestellt (Live-Gateway). Die Verbindung ist nur
+  lesend (`readonly`), Orders und Kontodaten werden nicht abgefragt. Andere Ziele: `--port 4002` (Gateway paper),
+  `7496`/`7497` (TWS) oder die Umgebungsvariablen `IB_HOST`, `IB_PORT`, `IB_CLIENT_ID`.
+- **Marktdaten-Abos:** Historische Daten brauchen dieselben Abos wie Live-Kurse (z. B. „US Securities Snapshot
+  and Futures Value Bundle“). Fehlt eins, meldet der Abruf den IB-Fehler je Symbol.
+- **Paging:** Der Abruf geht in Blöcken (`1m`: je 1 Monat, `5m`–`30m`: 6 Monate, Stunden: 1 Jahr, täglich: 10 Jahre)
+  von heute rückwärts, bis `--years`/`--from` oder der Beginn der IB-Historie erreicht ist. Er bleibt unter IBs
+  Grenze von 60 Abfragen je 10 Minuten. Bricht eine Abfrage nach mehreren Versuchen ab, wird der jüngere Teil trotzdem
+  gespeichert, mit einer Warnung. `--chunk "1 W"` verkleinert die Blöcke, falls IB große Abfragen ablehnt.
+- **Preise:** `TRADES` (Standard) ist um Splits bereinigt, nicht um Dividenden, also wie die tastytrade-Daten.
+  `--what ADJUSTED_LAST` bereinigt auch Dividenden. Forex (`--sec-type CASH`) nutzt `MIDPOINT`.
+- **Zeit:** wie bei tastytrade US-Börsenzeit (New York), standardmäßig nur reguläre Handelszeit, `--all-hours` für alles.
+  Zusätzliche Spalte `trades` (Anzahl Abschlüsse je Kerze).
+- **Futures:** ein Kontrakt mit `SYMBOL:BÖRSE:VERFALL`, z. B. `ES:CME:202612 --sec-type FUT`, auch abgelaufene
+  (IB hält sie rund zwei Jahre vor). `ES:CME --sec-type CONTFUT` ist der fortlaufende Kontrakt; den lässt IB nur
+  in einer einzigen Abfrage bis heute zu, deshalb eignet er sich eher für Tageskerzen.
+- `--append` hängt an eine vorhandene CSV an und lädt nur ab deren Ende nach.
 
 ## Bewegung bis zum Einstiegskurs (`excursion_rsi.py`)
 
