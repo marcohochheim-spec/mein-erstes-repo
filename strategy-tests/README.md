@@ -69,6 +69,65 @@ Unregister-ScheduledTask -TaskName "strategy-tests 1m-Archiv"     # entfernen
 
 Weitere Symbole: in `collect_intraday.ps1` den Standardwert von `$Symbols` erweitern.
 
+## Bewegung bis zum Einstiegskurs (`excursion_rsi.py`)
+
+Wie weit läuft der Kurs nach einem RSI-Einstieg in Trade-Richtung, bevor er zum Einstiegskurs zurückkommt?
+Die Antwort zeigt, wie viel ein Break-even-Stop realistisch mitnehmen kann.
+
+```powershell
+.\.venv\Scripts\python.exe excursion_rsi.py                          # SPY QQQ, 1m, RSI(14) 20/80
+.\.venv\Scripts\python.exe excursion_rsi.py SPY --lower 30 --upper 70 --ladder 1,2,5,10
+```
+
+- Einstieg zur Eröffnung der Kerze nach dem Signal, gemessen wird nur innerhalb derselben Sitzung.
+- **MFE** (maximale günstige Bewegung, in bp und $) bis zur ersten Kerze *nach* der Einstiegskerze, deren Tief (Long)
+  bzw. Hoch (Short) den Einstiegskurs berührt. Diese Kerze selbst zählt nicht mit, weil die Reihenfolge in der Kerze
+  unbekannt ist (konservativ). Kommt der Kurs nicht zurück, wird bis zum Sitzungsende gemessen.
+- Ausgabe je Symbol und gesamt: Quantile der MFE, Anteil der Trades, die zum Einstieg zurückkehren, Median-Minuten
+  bis dahin und der Anteil, der jede Schwelle aus `--ladder` (bp) erreicht.
+- **Vergleich mit Zufall:** Dieselbe Messung für jeden möglichen Einstiegszeitpunkt (`Zufall Long`/`Zufall Short`).
+  Nur wenn die RSI-Gruppen deutlich besser abschneiden, bringt das Signal etwas.
+- Ergebnisse in `output/excursion_rsi<…>/`: `summary.csv` (Tabelle) und `signals.csv` (jeder Einzel-Trade).
+
+## Orderflow-Studie mit ATAS-Daten (`orderflow_study.py`)
+
+Forschung für den [OrderFlowAutoBot](../ATAS-OrderFlowBot/README.md). Die Daten kommen aus dem ATAS-Indikator
+`OrderFlow Exporter (CSV)`, der je Chart eine `*_bars.csv` (Bar-Daten mit Delta, POC, Value Area) und eine
+`*_levels.csv` (Footprint: Bid/Ask je Preis) schreibt. tastytrade liefert keine Orderflow-Daten.
+
+```powershell
+.\.venv\Scripts\python.exe orderflow_study.py "$env:USERPROFILE\Documents\ATAS_OrderFlowExport" --tz Europe/Berlin --tick-value 12.5
+.\.venv\Scripts\python.exe orderflow_study.py <datei>_bars.csv --entry-window 15:30-21:45 --cost-ticks 1.5
+```
+
+Wird ein Ordner übergeben, nimmt das Skript die neueste `*_bars.csv` darin. Nötig sind mindestens 200 Bars;
+sinnvoll sind 20–60 Handelstage. Alle Auswertungen werden getrennt für In-Sample (erste `--is-frac`, Standard 70 %)
+und Out-of-Sample (Rest) ausgewiesen:
+
+1. **Merkmale:** Rang-Korrelation (IC) von Delta-Anteil, Delta-Position im Bar, Absorption, Stacked Imbalances,
+   Unfinished Auctions, Delta/Preis-Divergenz u. a. mit den Ticks der nächsten N Bars, dazu Quintil-Tabellen.
+2. **Bot-Standardwerte:** Die vier Bot-Module mit ihren Standard-Einstellungen, einzeln und kombiniert,
+   sowie der komplette Bot (SL 20 / TP 30 Ticks, Breakeven 20+2, Cooldown 5) als Trade-Simulation.
+3. **Parameter-Raster** je Modul. Volumen- und Delta-Schwellen kommen aus In-Sample-Quantilen.
+   *robust* heißt: genug Signale, In-Sample t ≥ 1,5 und Out-of-Sample weiterhin positiv mit t ≥ 1.
+4. **Stop/Target-Raster** für die beste Einstellung jedes Moduls, mit einem Trade gleichzeitig und Schluss zum
+   Sitzungsende wie im Bot, dazu MFE/MAE der Signale als Anhaltspunkt für Stop und Ziel.
+
+Ergebnisse in `output/orderflow_<datei>_<zeit>/`: `summary.md` (mit Parametervorschlägen unter den Namen aus dem
+ATAS-Einstellungsdialog), `feature_ic.csv/.png`, `feature_quintiles.csv`, `signals_bot_defaults.csv`,
+`param_grid.csv`, `bracket_grid.csv`, `excursions.csv`.
+
+Wichtige Optionen:
+
+- `--tz`: ATAS schreibt UTC, z. B. `Europe/Berlin` oder `America/Chicago` für lokale Zeiten.
+- `--entry-window HH:MM-HH:MM` (nach `--tz`), `--session-gap` (Minuten Pause = neue Sitzung, Standard 60).
+- `--horizons 1,3,5,10,20`, `--main-horizon 10` (in Bars), `--cost-ticks` (Kosten + Slippage je Trade),
+  `--tick-value` (Geld je Tick und Kontrakt, z. B. 12,5 für ES), `--min-n`, `--cooldown`, `--imb-ratio`.
+
+Konventionen wie im Bot: Ein Signal ist zum Schluss von Bar t bekannt und wird zur Eröffnung von Bar t+1 ausgeführt.
+Liegen Stop und Ziel im selben Bar, zählt der Stop. Die Nachbauten der Signalmodule in `orderflow.py` werden in
+`tests/test_orderflow.py` gegen zeilengetreue Übertragungen von `OrderFlowSignalStrategy.Signals.cs` geprüft.
+
 ## Methodik
 
 - **Signale** sind Kreuzungen: Kauf, wenn der RSI unter `--lower` schließt; Verkauf, wenn er über `--upper` schließt.
