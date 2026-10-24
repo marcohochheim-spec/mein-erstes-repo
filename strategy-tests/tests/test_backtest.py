@@ -226,6 +226,37 @@ def test_merge_archive(tmp_path):
     assert added == 4 and gap is None
 
 
+def test_excursion_before_breakeven():
+    from excursion_rsi import excursions, LONG, SHORT
+    idx = pd.date_range("2026-10-01 09:30", periods=6, freq="1min")
+    #            signal  entry   up     peak   back<=100  later high (must not count)
+    df = pd.DataFrame({"open":  [99.0, 100.0, 100.2, 100.4, 100.3, 99.9],
+                       "high":  [99.5, 100.3, 100.5, 100.9, 100.4, 101.5],
+                       "low":   [98.5, 99.9,  100.1, 100.3, 100.05, 99.8],
+                       "close": [99.2, 100.2, 100.4, 100.3, 100.0, 101.0]}, index=idx)
+    ex = excursions(df, np.array([0]), LONG).iloc[0]
+    # Entry 100.0 at bar 1; entry bar's own low (99.9) is ignored; bar 4 low 100.05 stays above entry,
+    # bar 5 low 99.8 touches -> break-even at bar 5. Peak = high 100.9 at bar 3 -> 90 bp.
+    assert ex.entry == 100.0
+    assert ex.mfe_bp == pytest.approx(90)
+    assert ex.minutes_to_peak == 2 and ex.minutes_to_breakeven == 4 and ex.returned_to_entry
+
+    # Short from the same entry: bar 2 high 100.5 >= 100 -> break-even immediately; MFE = entry bar only.
+    ex = excursions(df, np.array([0]), SHORT).iloc[0]
+    assert ex.mfe_bp == pytest.approx(10)          # entry bar low 99.9
+    assert ex.minutes_to_breakeven == 1
+
+
+def test_excursion_no_return_and_session_end():
+    from excursion_rsi import excursions, LONG
+    df = make_intraday([[100, 100.5, 101, 102], [90, 91]])
+    ex = excursions(df, np.array([0, 3]), LONG)
+    assert len(ex) == 1                             # signal on the session's last bar is skipped
+    row = ex.iloc[0]
+    assert not row.returned_to_entry and np.isnan(row.minutes_to_breakeven)
+    assert row.mfe_bp == pytest.approx(200)         # high 102.0 vs entry 100 (high = max(open, close))
+
+
 def test_stream_symbol():
     from fetch_candles import stream_symbol
     assert stream_symbol("SPY", "1d", False) == "SPY{=1d}"
